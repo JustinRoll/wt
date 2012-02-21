@@ -9,6 +9,7 @@
 #include <curl/curl.h>
 
 void * mainloop(void *);
+void * checkloop(void *);
 
 struct tw;
 
@@ -23,66 +24,16 @@ struct tw
 
 struct tw* tw_head = NULL;
 
+
 int main(int argc, char ** argv)
 {
-	int aflag = 0;
-	int index = 0;
-	char c;
-	char url[BUFSIZ];
-	char outfilestr[BUFSIZ];
-	CURL *curl;
-	CURLcode res;
-	FILE *fp;
 	pthread_t t1;
-	pthread_t t2;
-	time_t s_time;
-	time_t c_time;
-	struct tw* tw_cur = NULL;
-	int count;
 
 	if (argc == 1)
 	{
 		// proper run
-		pthread_create(&t1, NULL, mainloop, NULL);
-		time (&s_time);
-		while (true)
-		{
-			time (&c_time);
-			if (c_time >= s_time)
-			{
-				tw_cur = tw_head;
-
-				count = 0;
-				while (tw_cur != NULL)
-				{
-					if (c_time >= tw_cur->sched_time)
-					{
-						// do update
-						printf("Updating element %d\n", count);
-						curl = curl_easy_init();
-						if (curl)
-						{
-							snprintf(outfilestr, BUFSIZ, "%d.html", count);
-							fp = fopen(outfilestr, "wb");
-							curl_easy_setopt(curl, CURLOPT_URL, tw_cur->url);
-							curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, fwrite);
-							curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
-							res = curl_easy_perform(curl);
-		
-							curl_easy_cleanup(curl);
-							fclose(fp);
-						}
-
-						tw_cur->sched_time += tw_cur->min * 60;
-
-					}
-
-					count += 1;
-					tw_cur = tw_cur->next;
-				}
-				s_time += 1;
-			}
-		}
+		pthread_create(&t1, NULL, checkloop, NULL);
+		mainloop(NULL);
 		return 0;
 
 	}
@@ -98,12 +49,13 @@ void * mainloop(void *)
 	char str[BUFSIZ];
 	char * str_loc;
 	char * curloc;
+	char * minloc;
 	//struct tw* tw_head = NULL;
 	struct tw* tw_cur = NULL;
 	struct tw* tw_new = NULL;
 	long tw_size = 0;
 	long count;
-	long val;
+	long val, val2;
 	char timestr[BUFSIZ];
 	
 
@@ -175,14 +127,30 @@ void * mainloop(void *)
 				
 			}
 
-			if (tw_cur->next != NULL)
+			if (tw_cur->prev == NULL)
 			{
-				tw_cur->prev->next = tw_cur->next;
-				tw_cur->next->prev = tw_cur->prev;
+				if (tw_cur->next != NULL)
+				{
+					tw_cur->next->prev = NULL;
+					tw_head = tw_cur->next;
+				}
+				else
+				{
+					tw_head = NULL;
+				}
+
 			}
 			else
 			{
-				tw_cur->prev->next = NULL;
+				if (tw_cur->next != NULL)
+				{
+					tw_cur->prev->next = tw_cur->next;
+					tw_cur->next->prev = tw_cur->prev;
+				}
+				else
+				{
+					tw_cur->prev->next = NULL;
+				}
 			}
 			free(tw_cur);
 			tw_size -= 1;
@@ -235,7 +203,45 @@ void * mainloop(void *)
 		}
 		else if (c == 'e')
 		{
-			printf("EDIT\n");
+			if (tw_head == NULL)
+				continue;	
+		
+			curloc = strtok_r(NULL, " ", &str_loc);
+			minloc = strtok_r(NULL, " ", &str_loc);
+			if (curloc == 0 || minloc == 0)
+			{
+				printf("Usage: e NUM MIN\n");
+				continue;
+			}
+
+			val = atoi(curloc);
+			val2 = atoi(minloc);
+
+			count = 0;
+			tw_cur = tw_head;
+
+			if (val < 0)
+				continue;
+
+			while (count < val)
+			{
+				if (tw_cur == NULL)
+				{
+					printf("Cannot find element %d\n", val);
+					goto leaveloop;
+				}
+
+				tw_cur = tw_cur->next;
+				count += 1;
+			}
+
+			if (val2 > 1)
+				tw_cur->min = val2;
+			else
+				tw_cur->min = 1;
+leaveloop:
+			continue;
+
 		}
 		else if (c == 's')
 		{
@@ -246,4 +252,68 @@ void * mainloop(void *)
 
 
 
+}
+
+void * checkloop(void *)
+{
+	int aflag = 0;
+	int index = 0;
+	char c;
+	char url[BUFSIZ];
+	char outfilestr[BUFSIZ];
+	CURL *curl;
+	CURLcode res;
+	FILE *fp;
+	pthread_t t2;
+	time_t s_time;
+	time_t c_time;
+	struct tw* tw_cur = NULL;
+	int count;
+
+
+
+		time (&s_time);
+
+		while (true)
+		{
+			time (&c_time);
+			if (c_time >= s_time)
+			{
+				tw_cur = tw_head;
+
+				count = 0;
+				while (tw_cur != NULL)
+				{
+					if (c_time >= tw_cur->sched_time)
+					{
+						// do update
+						//printf("Updating element %d\n", count);
+						strncpy(url, tw_cur->url, BUFSIZ);
+						url[BUFSIZ-1] = 0;
+						curl = curl_easy_init();
+						if (curl)
+						{
+							snprintf(outfilestr, BUFSIZ, "%d.html", count);
+							fp = fopen(outfilestr, "wb");
+							curl_easy_setopt(curl, CURLOPT_URL, url);
+							curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, fwrite);
+							curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
+							res = curl_easy_perform(curl);
+		
+							curl_easy_cleanup(curl);
+							fclose(fp);
+						}
+
+						tw_cur->sched_time += tw_cur->min * 60;
+
+						//printf("Update complete\n");
+
+					}
+
+					count += 1;
+					tw_cur = tw_cur->next;
+				}
+				s_time += 1;
+			}
+		}
 }

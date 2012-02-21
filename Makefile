@@ -1,9 +1,9 @@
 all: wt.o
-	gcc -o wt wt.o -lcurl
+	gcc -g -o wt wt.o -lcurl
 
 clean: 
 	rm *.o
 	rm wt
 
 wt.o: wt.cpp
-	gcc -c wt.cpp 
+	gcc -g -c wt.cpp 
