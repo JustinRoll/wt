@@ -23,6 +23,28 @@ struct tw
 };
 
 struct tw* tw_head = NULL;
+long tw_size = 0;
+
+struct tw* tw_at(long loc)
+{
+	struct tw* tw_cur;
+
+	if (loc < 0)
+		return NULL;
+	if (loc > tw_size-1)
+		return NULL;
+
+	tw_cur = tw_head;
+	for( ; loc > 0; loc--)
+	{
+		if (tw_cur == NULL)
+			return NULL;
+		tw_cur = tw_cur->next;
+	}
+
+	return tw_cur;
+
+}
 
 
 int main(int argc, char ** argv)
@@ -53,7 +75,6 @@ void * mainloop(void *)
 	//struct tw* tw_head = NULL;
 	struct tw* tw_cur = NULL;
 	struct tw* tw_new = NULL;
-	long tw_size = 0;
 	long count;
 	long val, val2;
 	char timestr[BUFSIZ];
@@ -115,18 +136,12 @@ void * mainloop(void *)
 			val = atoi(curloc);
 
 			// delete element 'val'
-			tw_cur = tw_head;
-			for (count = 0; count < val; count++)
-			{
-				if (tw_cur->next == NULL)
-				{
-					printf("%d is not in the list", val);
-					continue;
-				}
-				tw_cur = tw_cur->next;
-				
-			}
+			tw_cur = tw_at(val);
 
+			if (tw_cur == NULL)
+				continue;
+
+			// patch pointers
 			if (tw_cur->prev == NULL)
 			{
 				if (tw_cur->next != NULL)
